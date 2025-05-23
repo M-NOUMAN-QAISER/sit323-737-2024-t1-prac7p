@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongodb-backup
+  namespace: default
+spec:
+  schedule: "0 0 * * *"  # Cron expression to run daily at midnight
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: mongodb-backup
+              image: mongo:5.0
+              command:
+                - "/bin/bash"
+                - "-c"
+                - |
+                  mkdir -p /backup/mongodb/$(date +\%Y-\%m-\%d)
+                  mongodump --host=mongodb-service --username=$(MONGO_USER) --password=$(MONGO_PASSWORD) --authenticationDatabase=admin --out=/backup/mongodb/$(date +\%Y-\%m-\%d)
+              env:
+                - name: MONGO_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: mongodb-secret
+                      key: mongo-user
+                - name: MONGO_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: mongodb-secret
+                      key: mongo-password
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: mongodb-pvc  # The same PVC as MongoDB uses or another PVC
+          restartPolicy: OnFailure
+
+
